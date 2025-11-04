@@ -26,8 +26,11 @@ if [ "$USE_PROXY" = true ]; then
   export http_proxy="$PROXY_URL"
   export https_proxy="$PROXY_URL"
   export NO_PROXY="localhost,127.0.0.1"
+  # npm-specific proxy config for Node.js scripts
+  export npm_config_proxy="$PROXY_URL"
+  export npm_config_https_proxy="$PROXY_URL"
 else
-  unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
+  unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy npm_config_proxy npm_config_https_proxy
 fi
 
 # ────────────────────────────────────────────────────────────────
@@ -60,9 +63,18 @@ git checkout "v$LATEST_VERSION"
 if [ "$USE_PROXY" = true ]; then
   pnpm config set proxy "$PROXY_URL"
   pnpm config set https-proxy "$PROXY_URL"
+  # Also set npm config for Node.js scripts (like electron postinstall)
+  npm config set proxy "$PROXY_URL" || true
+  npm config set https-proxy "$PROXY_URL" || true
+  # Set environment variables that Node.js HTTP clients check
+  export npm_config_proxy="$PROXY_URL"
+  export npm_config_https_proxy="$PROXY_URL"
 else
   pnpm config delete proxy || true
   pnpm config delete https-proxy || true
+  npm config delete proxy || true
+  npm config delete https-proxy || true
+  unset npm_config_proxy npm_config_https_proxy
 fi
 
 pnpm install
