@@ -28,12 +28,14 @@ if [ "$USE_PROXY" = true ]; then
   export HTTPS_PROXY="$PROXY_URL"
   export http_proxy="$PROXY_URL"
   export https_proxy="$PROXY_URL"
+  export ALL_PROXY="$PROXY_URL"
+  export all_proxy="$PROXY_URL"
   export NO_PROXY="localhost,127.0.0.1"
   # npm-specific proxy config for Node.js scripts
   export npm_config_proxy="$PROXY_URL"
   export npm_config_https_proxy="$PROXY_URL"
 else
-  unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy npm_config_proxy npm_config_https_proxy
+  unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy npm_config_proxy npm_config_https_proxy
 fi
 
 # ────────────────────────────────────────────────────────────────
@@ -140,6 +142,14 @@ if [ "$USE_PROXY" = true ]; then
   # Set environment variables that Node.js HTTP clients check
   export npm_config_proxy="$PROXY_URL"
   export npm_config_https_proxy="$PROXY_URL"
+  # Ensure proxy env vars are available for postinstall scripts
+  # (they should already be set, but being explicit)
+  export HTTP_PROXY="$PROXY_URL"
+  export HTTPS_PROXY="$PROXY_URL"
+  export http_proxy="$PROXY_URL"
+  export https_proxy="$PROXY_URL"
+  export ALL_PROXY="$PROXY_URL"
+  export all_proxy="$PROXY_URL"
 else
   pnpm config delete proxy || true
   pnpm config delete https-proxy || true
@@ -148,7 +158,12 @@ else
   unset npm_config_proxy npm_config_https_proxy
 fi
 
-pnpm install
+# Run pnpm install with proxy environment variables explicitly passed
+if [ "$USE_PROXY" = true ]; then
+  HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" http_proxy="$PROXY_URL" https_proxy="$PROXY_URL" ALL_PROXY="$PROXY_URL" all_proxy="$PROXY_URL" npm_config_proxy="$PROXY_URL" npm_config_https_proxy="$PROXY_URL" pnpm install
+else
+  pnpm install
+fi
 
 # ────────────────────────────────────────────────────────────────
 # Set version files
