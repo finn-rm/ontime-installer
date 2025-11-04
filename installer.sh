@@ -114,6 +114,16 @@ cp -a . "$APP_DIR/"
 # ────────────────────────────────────────────────────────────────
 # Install dependencies
 cd "$APP_DIR"
+
+# Configure pnpm proxy if needed
+if [ "$USE_PROXY" = true ]; then
+  pnpm config set proxy "$PROXY_URL"
+  pnpm config set https-proxy "$PROXY_URL"
+else
+  pnpm config delete proxy || true
+  pnpm config delete https-proxy || true
+fi
+
 pnpm install
 
 # ────────────────────────────────────────────────────────────────
