@@ -44,11 +44,23 @@ cd "$APP_DIR"
 
 # ────────────────────────────────────────────────────────────────
 # Latest version
-LATEST_VERSION=$(curl https://api.github.com/repos/cpvalente/ontime/tags \
-  | jq -r 'first(.[].name | select(test("^v[0-9]")))')
+GITHUB_RESPONSE=$(curl -s https://api.github.com/repos/cpvalente/ontime/tags)
+if [ $? -ne 0 ] || [ -z "$GITHUB_RESPONSE" ]; then
+  echo "❌ Failed to fetch tags from GitHub API"
+  exit 1
+fi
+
+# Check if response is valid JSON
+if ! echo "$GITHUB_RESPONSE" | jq empty 2>/dev/null; then
+  echo "❌ GitHub API returned invalid JSON response:"
+  echo "$GITHUB_RESPONSE" | head -5
+  exit 1
+fi
+
+LATEST_VERSION=$(echo "$GITHUB_RESPONSE" | jq -r 'first(.[].name | select(test("^v[0-9]")))')
 LATEST_VERSION=${LATEST_VERSION#v}
-if [ -z "$LATEST_VERSION" ]; then
-  echo "❌ Failed to fetch latest version"
+if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+  echo "❌ Failed to parse latest version from GitHub API response"
   exit 1
 fi
 echo "Updating Ontime to v$LATEST_VERSION"
