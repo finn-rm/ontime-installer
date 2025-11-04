@@ -151,10 +151,36 @@ else
 fi
 
 # Run pnpm install with proxy environment variables explicitly passed
+# Electron's postinstall script needs special proxy handling
 if [ "$USE_PROXY" = true ]; then
-  HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" http_proxy="$PROXY_URL" https_proxy="$PROXY_URL" ALL_PROXY="$PROXY_URL" all_proxy="$PROXY_URL" npm_config_proxy="$PROXY_URL" npm_config_https_proxy="$PROXY_URL" pnpm install
-else
+  # Electron-specific proxy environment variables
+  export ELECTRON_GET_USE_PROXY=1
+  HTTP_PROXY="$PROXY_URL" \
+  HTTPS_PROXY="$PROXY_URL" \
+  http_proxy="$PROXY_URL" \
+  https_proxy="$PROXY_URL" \
+  ALL_PROXY="$PROXY_URL" \
+  all_proxy="$PROXY_URL" \
+  npm_config_proxy="$PROXY_URL" \
+  npm_config_https_proxy="$PROXY_URL" \
+  ELECTRON_GET_USE_PROXY=1 \
   pnpm install
+else
+  # Use electron mirror for more reliable downloads (works better from various network locations)
+  # This mirrors GitHub releases and is often faster and more reliable
+  export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+  pnpm install || {
+    echo "⚠️  Install with mirror failed, trying direct connection..."
+    unset ELECTRON_MIRROR
+    pnpm install || {
+      echo "❌ pnpm install failed. Network connectivity issue detected."
+      echo "💡 Suggestions:"
+      echo "   1. Check if you need to enable proxy in config.json (set use_proxy: true)"
+      echo "   2. Verify network connectivity to GitHub and npm mirrors"
+      echo "   3. Check firewall settings"
+      exit 1
+    }
+  }
 fi
 
 # ────────────────────────────────────────────────────────────────
