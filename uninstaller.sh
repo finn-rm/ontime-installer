@@ -23,6 +23,20 @@ sudo systemctl disable ontime.service || true
 sudo rm -f "$SYSTEMD_SERVICE_FILE"
 sudo systemctl daemon-reload
 
+# Remove proxy settings
+echo "Removing proxy settings..."
+# Remove git global proxy settings
+git config --global --unset http.proxy || true
+git config --global --unset https.proxy || true
+
+# Remove npm global proxy settings
+npm config delete proxy || true
+npm config delete https-proxy || true
+
+# Remove pnpm global proxy settings
+pnpm config delete proxy || true
+pnpm config delete https-proxy || true
+
 # Remove application files
 sudo rm -rf "$APP_DIR"
 
