@@ -43,7 +43,7 @@ cd "$APP_DIR"
 
 # ────────────────────────────────────────────────────────────────
 # Latest version
-LATEST_VERSION=$(curl --silent $CURL_PROXY https://api.github.com/repos/cpvalente/ontime/tags \
+LATEST_VERSION=$(curl $CURL_PROXY https://api.github.com/repos/cpvalente/ontime/tags \
   | jq -r 'first(.[].name | select(test("^v[0-9]")))')
 LATEST_VERSION=${LATEST_VERSION#v}
 if [ -z "$LATEST_VERSION" ]; then
@@ -76,10 +76,10 @@ echo "export const ONTIME_VERSION = \"$LATEST_VERSION\";" > "$APP_DIR/apps/clien
 
 # ────────────────────────────────────────────────────────────────
 # Build
-if pnpm --filter=ontime-ui run build 2>/dev/null; then
+if pnpm --filter=ontime-ui run build; then
   echo "UI build completed"
 fi
-if pnpm --filter=ontime-server run build 2>/dev/null; then
+if pnpm --filter=ontime-server run build; then
   echo "Server build completed"
 fi
 
