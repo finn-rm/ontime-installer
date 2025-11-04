@@ -29,10 +29,8 @@ if [ "$USE_PROXY" = true ]; then
   export http_proxy="$PROXY_URL"
   export https_proxy="$PROXY_URL"
   export NO_PROXY="localhost,127.0.0.1"
-  CURL_PROXY="--proxy $PROXY_URL"
 else
   unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
-  CURL_PROXY=""
 fi
 
 # ────────────────────────────────────────────────────────────────
@@ -89,7 +87,7 @@ fi
 
 # ────────────────────────────────────────────────────────────────
 # Latest version
-LATEST_VERSION=$(curl $CURL_PROXY https://api.github.com/repos/cpvalente/ontime/tags \
+LATEST_VERSION=$(curl https://api.github.com/repos/cpvalente/ontime/tags \
   | jq -r 'first(.[].name | select(test("^v[0-9]")))')
 LATEST_VERSION=${LATEST_VERSION#v}
 if [ -z "$LATEST_VERSION" ]; then
