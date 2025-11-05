@@ -36,13 +36,12 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────
-# Verify installation
-if [ ! -d "$APP_DIR/.git" ]; then
-  echo "❌ Ontime not installed. Run install script first."
+# Verify installation directory exists
+if [ ! -d "$APP_DIR" ]; then
+  echo "❌ App directory not found: $APP_DIR"
+  echo "💡 Run install script first or ensure app_dir is correct in config.json"
   exit 1
 fi
-
-cd "$APP_DIR"
 
 # ────────────────────────────────────────────────────────────────
 # Update proxy in /etc/environment and ~/.bashrc
@@ -97,64 +96,11 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────
-# Latest version
-GITHUB_RESPONSE=$(curl -s https://api.github.com/repos/cpvalente/ontime/tags)
-if [ $? -ne 0 ] || [ -z "$GITHUB_RESPONSE" ]; then
-  echo "❌ Failed to fetch tags from GitHub API"
-  exit 1
-fi
+# Update using @getontime/cli
+# Use electron mirror for more reliable downloads
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 
-# Check if response is valid JSON
-if ! echo "$GITHUB_RESPONSE" | jq empty 2>/dev/null; then
-  echo "❌ GitHub API returned invalid JSON response:"
-  echo "$GITHUB_RESPONSE" | head -5
-  exit 1
-fi
-
-LATEST_VERSION=$(echo "$GITHUB_RESPONSE" | jq -r 'first(.[].name | select(test("^v[0-9]")))')
-LATEST_VERSION=${LATEST_VERSION#v}
-if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
-  echo "❌ Failed to parse latest version from GitHub API response"
-  exit 1
-fi
-echo "Updating Ontime to v$LATEST_VERSION"
-
-# ────────────────────────────────────────────────────────────────
-# Fetch latest code
-git fetch --tags origin
-git checkout "v$LATEST_VERSION"
-
-# ────────────────────────────────────────────────────────────────
-# Update dependencies
 if [ "$USE_PROXY" = true ]; then
-  pnpm config set proxy "$PROXY_URL"
-  pnpm config set https-proxy "$PROXY_URL"
-  # Also set npm config for Node.js scripts (like electron postinstall)
-  npm config set proxy "$PROXY_URL" || true
-  npm config set https-proxy "$PROXY_URL" || true
-  # Set environment variables that Node.js HTTP clients check
-  export npm_config_proxy="$PROXY_URL"
-  export npm_config_https_proxy="$PROXY_URL"
-  # Ensure proxy env vars are available for postinstall scripts
-  export HTTP_PROXY="$PROXY_URL"
-  export HTTPS_PROXY="$PROXY_URL"
-  export http_proxy="$PROXY_URL"
-  export https_proxy="$PROXY_URL"
-  export ALL_PROXY="$PROXY_URL"
-  export all_proxy="$PROXY_URL"
-else
-  pnpm config delete proxy || true
-  pnpm config delete https-proxy || true
-  npm config delete proxy || true
-  npm config delete https-proxy || true
-  unset npm_config_proxy npm_config_https_proxy
-fi
-
-# Run pnpm install with proxy environment variables explicitly passed
-# Electron's postinstall script needs special proxy handling
-if [ "$USE_PROXY" = true ]; then
-  # Electron-specific proxy environment variables
-  export ELECTRON_GET_USE_PROXY=1
   HTTP_PROXY="$PROXY_URL" \
   HTTPS_PROXY="$PROXY_URL" \
   http_proxy="$PROXY_URL" \
@@ -163,45 +109,12 @@ if [ "$USE_PROXY" = true ]; then
   all_proxy="$PROXY_URL" \
   npm_config_proxy="$PROXY_URL" \
   npm_config_https_proxy="$PROXY_URL" \
-  ELECTRON_GET_USE_PROXY=1 \
-  pnpm install
+  ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
+  npx @getontime/cli install --app-dir "$APP_DIR"
 else
-  # Use electron mirror for more reliable downloads (works better from various network locations)
-  # This mirrors GitHub releases and is often faster and more reliable
-  export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-  pnpm install || {
-    echo "⚠️  Install with mirror failed, trying direct connection..."
-    unset ELECTRON_MIRROR
-    pnpm install || {
-      echo "❌ pnpm install failed. Network connectivity issue detected."
-      echo "💡 Suggestions:"
-      echo "   1. Check if you need to enable proxy in config.json (set use_proxy: true)"
-      echo "   2. Verify network connectivity to GitHub and npm mirrors"
-      echo "   3. Check firewall settings"
-      exit 1
-    }
-  }
+  ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
+  npx @getontime/cli install --app-dir "$APP_DIR"
 fi
-
-# ────────────────────────────────────────────────────────────────
-# Update version files
-echo "export const ONTIME_VERSION = \"$LATEST_VERSION\";" > "$APP_DIR/apps/server/src/ONTIME_VERSION.js"
-echo "export const ONTIME_VERSION = \"$LATEST_VERSION\";" > "$APP_DIR/apps/client/src/ONTIME_VERSION.js"
-
-# ────────────────────────────────────────────────────────────────
-# Build
-if pnpm --filter=ontime-ui run build; then
-  echo "UI build completed"
-fi
-if pnpm --filter=ontime-server run build; then
-  echo "Server build completed"
-fi
-
-# ────────────────────────────────────────────────────────────────
-# Deploy
-cp -r "$APP_DIR/apps/client/build/"* "$APP_DIR/client/"
-cp -r "$APP_DIR/apps/server/dist/"* "$APP_DIR/server/"
-cp -r "$APP_DIR/apps/server/src/external/"* "$APP_DIR/external/"
 
 # ────────────────────────────────────────────────────────────────
 # Update .npmrc file in app directory for npm/pnpm
@@ -271,4 +184,4 @@ fi
 sudo systemctl daemon-reload
 sudo systemctl restart ontime.service
 
-echo "✅ Ontime updated successfully to v$LATEST_VERSION"
+echo "✅ Ontime updated successfully"

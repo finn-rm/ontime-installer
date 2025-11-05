@@ -143,99 +143,30 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────
-# Latest version
-GITHUB_RESPONSE=$(curl -s https://api.github.com/repos/cpvalente/ontime/tags)
-if [ $? -ne 0 ] || [ -z "$GITHUB_RESPONSE" ]; then
-  echo "❌ Failed to fetch tags from GitHub API"
-  exit 1
-fi
-
-# Check if response is valid JSON
-if ! echo "$GITHUB_RESPONSE" | jq empty 2>/dev/null; then
-  echo "❌ GitHub API returned invalid JSON response:"
-  echo "$GITHUB_RESPONSE" | head -5
-  exit 1
-fi
-
-LATEST_VERSION=$(echo "$GITHUB_RESPONSE" | jq -r 'first(.[].name | select(test("^v[0-9]")))')
-LATEST_VERSION=${LATEST_VERSION#v}
-if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
-  echo "❌ Failed to parse latest version from GitHub API response"
-  exit 1
-fi
-echo "Installing Ontime v$LATEST_VERSION"
-
-# ────────────────────────────────────────────────────────────────
 # Prepare directories
 sudo mkdir -p "$APP_DIR" "$DATA_DIR"
 sudo chown "$USER_NAME":"$USER_NAME" "$APP_DIR" "$DATA_DIR"
-mkdir -p "$APP_DIR/client" "$APP_DIR/server" "$APP_DIR/external"
 
 # ────────────────────────────────────────────────────────────────
-# Clone repository
-cd /tmp
-rm -rf ontime
-git clone "$REPO_URL"
-cd ontime
-git checkout "v$LATEST_VERSION"
-cp -a . "$APP_DIR/"
+# Install using @getontime/cli
+# Use electron mirror for more reliable downloads
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 
-# ────────────────────────────────────────────────────────────────
-# Install dependencies
-cd "$APP_DIR"
-
-# Configure pnpm proxy if needed
 if [ "$USE_PROXY" = true ]; then
-  pnpm config set proxy "$PROXY_URL"
-  pnpm config set https-proxy "$PROXY_URL"
-  # Also set npm config for Node.js scripts (like electron postinstall)
-  npm config set proxy "$PROXY_URL" || true
-  npm config set https-proxy "$PROXY_URL" || true
-  # Set environment variables that Node.js HTTP clients check
-  export npm_config_proxy="$PROXY_URL"
-  export npm_config_https_proxy="$PROXY_URL"
-  # Ensure proxy env vars are available for postinstall scripts
-  # (they should already be set, but being explicit)
-  export HTTP_PROXY="$PROXY_URL"
-  export HTTPS_PROXY="$PROXY_URL"
-  export http_proxy="$PROXY_URL"
-  export https_proxy="$PROXY_URL"
-  export ALL_PROXY="$PROXY_URL"
-  export all_proxy="$PROXY_URL"
+  HTTP_PROXY="$PROXY_URL" \
+  HTTPS_PROXY="$PROXY_URL" \
+  http_proxy="$PROXY_URL" \
+  https_proxy="$PROXY_URL" \
+  ALL_PROXY="$PROXY_URL" \
+  all_proxy="$PROXY_URL" \
+  npm_config_proxy="$PROXY_URL" \
+  npm_config_https_proxy="$PROXY_URL" \
+  ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
+  npx @getontime/cli install --app-dir "$APP_DIR"
 else
-  pnpm config delete proxy || true
-  pnpm config delete https-proxy || true
-  npm config delete proxy || true
-  npm config delete https-proxy || true
-  unset npm_config_proxy npm_config_https_proxy
+  ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
+  npx @getontime/cli install --app-dir "$APP_DIR"
 fi
-
-# Run pnpm install with proxy environment variables explicitly passed
-if [ "$USE_PROXY" = true ]; then
-  HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" http_proxy="$PROXY_URL" https_proxy="$PROXY_URL" ALL_PROXY="$PROXY_URL" all_proxy="$PROXY_URL" npm_config_proxy="$PROXY_URL" npm_config_https_proxy="$PROXY_URL" pnpm install
-else
-  pnpm install
-fi
-
-# ────────────────────────────────────────────────────────────────
-# Set version files
-echo "export const ONTIME_VERSION = \"$LATEST_VERSION\";" > "$APP_DIR/apps/server/src/ONTIME_VERSION.js"
-echo "export const ONTIME_VERSION = \"$LATEST_VERSION\";" > "$APP_DIR/apps/client/src/ONTIME_VERSION.js"
-
-# ────────────────────────────────────────────────────────────────
-# Build
-if pnpm --filter=ontime-ui run build; then
-  echo "UI build completed"
-fi
-if pnpm --filter=ontime-server run build; then
-  echo "Server build completed"
-fi
-
-# ────────────────────────────────────────────────────────────────
-# Deploy
-cp -r "$APP_DIR/apps/client/build/"* "$APP_DIR/client/"
-cp -r "$APP_DIR/apps/server/dist/"* "$APP_DIR/server/"
-cp -r "$APP_DIR/apps/server/src/external/"* "$APP_DIR/external/"
 
 # ────────────────────────────────────────────────────────────────
 # Create .npmrc file in app directory for npm/pnpm
@@ -304,4 +235,4 @@ sudo systemctl daemon-reload
 sudo systemctl enable ontime.service
 sudo systemctl start ontime.service
 
-echo "✅ Ontime v$LATEST_VERSION installed successfully"
+echo "✅ Ontime installed successfully"
