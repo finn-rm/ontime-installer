@@ -15,7 +15,7 @@ fi
 
 USE_PROXY=$(jq -r 'if .use_proxy == null then false else .use_proxy end' "$CONFIG_FILE")
 PROXY_URL=$(jq -r 'if .proxy_url == null then "http://squid.internal:3128" else .proxy_url end' "$CONFIG_FILE")
-TIMEZONE=$(jq -r 'if .timezone == null or .timezone == "" then "GMT" else .timezone end' "$CONFIG_FILE")
+TIMEZONE=$(jq -r 'if .timezone == null or .timezone == "" then "Europe/Berlin" else .timezone end' "$CONFIG_FILE")
 USER_NAME="${SUDO_USER:-$USER}"
 
 # ────────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ fi
 
 # ────────────────────────────────────────────────────────────────
 # Get current timezone from config
-CURRENT_TZ=$(jq -r 'if .timezone == null or .timezone == "" then "GMT" else .timezone end' "$CONFIG_FILE")
+CURRENT_TZ=$(jq -r 'if .timezone == null or .timezone == "" then "Europe/Berlin" else .timezone end' "$CONFIG_FILE")
 echo "Current timezone: $CURRENT_TZ"
 
 # ────────────────────────────────────────────────────────────────
@@ -45,6 +45,9 @@ else
   else
     echo "❌ Could not find timezone information on this system"
     read -p "Enter timezone (e.g., Asia/Singapore, GMT, UTC): " NEW_TZ
+    if [ -z "$NEW_TZ" ]; then
+      exit 1
+    fi
   fi
   
   if [ -z "$TIMEZONES" ] && [ -z "$NEW_TZ" ]; then
@@ -53,62 +56,75 @@ else
   fi
   
   if [ -z "$NEW_TZ" ]; then
-    echo ""
-    read -p "Enter timezone (or press Enter to search): " search_term
-    
-    if [ -n "$search_term" ]; then
-      # Filter timezones by search term
-      FILTERED=$(echo "$TIMEZONES" | grep -i "$search_term" | head -20)
-      
-      if [ -z "$FILTERED" ]; then
-        echo "❌ No timezones found matching: $search_term"
-        exit 1
-      fi
-      
-      echo ""
-      echo "Matching timezones:"
-      echo "$FILTERED" | nl -w2 -s'. '
-      echo ""
-      read -p "Enter number or timezone name: " choice
-      
-      # Check if it's a number
-      if [[ "$choice" =~ ^[0-9]+$ ]]; then
-        NEW_TZ=$(echo "$FILTERED" | sed -n "${choice}p")
-      else
-        NEW_TZ="$choice"
-      fi
-    else
-      # Show popular/categorized timezones
-      echo ""
-      echo "Popular timezones:"
-      echo "  GMT (Greenwich Mean Time)"
-      echo "  UTC (Coordinated Universal Time)"
-      echo ""
-      echo "You can search by region (e.g., 'Asia', 'Europe', 'America'):"
-      read -p "Enter search term or timezone name: " search_term
-      
-      if [ -n "$search_term" ]; then
-        FILTERED=$(echo "$TIMEZONES" | grep -i "$search_term" | head -30)
-        if [ -z "$FILTERED" ]; then
-          # If no matches, assume user entered full timezone
-          NEW_TZ="$search_term"
+    # Install fzf if needed
+    if ! command -v fzf &>/dev/null; then
+      echo "Installing fzf for interactive timezone selection..."
+      if command -v apt-get &>/dev/null; then
+        # Try apt first (Ubuntu/Debian)
+        if sudo apt-get update && sudo apt-get install -y fzf 2>/dev/null; then
+          echo "✅ fzf installed successfully"
         else
-          echo ""
-          echo "Matching timezones:"
-          echo "$FILTERED" | nl -w2 -s'. '
-          echo ""
-          read -p "Enter number or timezone name: " choice
-          
-          if [[ "$choice" =~ ^[0-9]+$ ]]; then
-            NEW_TZ=$(echo "$FILTERED" | sed -n "${choice}p")
+          # Fallback: install via git (official method)
+          echo "Installing fzf from GitHub..."
+          if command -v git &>/dev/null && command -v bash &>/dev/null; then
+            FZF_DIR="/tmp/fzf"
+            rm -rf "$FZF_DIR"
+            git clone --depth 1 https://github.com/junegunn/fzf.git "$FZF_DIR" 2>/dev/null || {
+              echo "❌ Failed to clone fzf repository"
+              echo "⚠️  Please install fzf manually or provide timezone as argument: ./update_timezone.sh Asia/Singapore"
+              exit 1
+            }
+            "$FZF_DIR/install" --bin 2>/dev/null || {
+              echo "❌ Failed to install fzf"
+              echo "⚠️  Please install fzf manually or provide timezone as argument: ./update_timezone.sh Asia/Singapore"
+              exit 1
+            }
+            # Add to PATH temporarily (fzf installs to ~/.fzf/bin or ~/.local/bin)
+            export PATH="$HOME/.fzf/bin:$HOME/.local/bin:$PATH"
           else
-            NEW_TZ="$choice"
+            echo "❌ git or bash not found. Cannot install fzf."
+            echo "⚠️  Please install fzf manually or provide timezone as argument: ./update_timezone.sh Asia/Singapore"
+            exit 1
           fi
         fi
+      elif command -v yum &>/dev/null; then
+        sudo yum install -y fzf || {
+          echo "❌ Failed to install fzf via yum"
+          echo "⚠️  Please install fzf manually or provide timezone as argument: ./update_timezone.sh Asia/Singapore"
+          exit 1
+        }
+      elif command -v dnf &>/dev/null; then
+        sudo dnf install -y fzf || {
+          echo "❌ Failed to install fzf via dnf"
+          echo "⚠️  Please install fzf manually or provide timezone as argument: ./update_timezone.sh Asia/Singapore"
+          exit 1
+        }
+      elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm fzf || {
+          echo "❌ Failed to install fzf via pacman"
+          echo "⚠️  Please install fzf manually or provide timezone as argument: ./update_timezone.sh Asia/Singapore"
+          exit 1
+        }
       else
-        echo "❌ No timezone specified"
+        echo "⚠️  Could not install fzf automatically. Please install it manually."
+        echo "   You can also provide timezone as argument: ./update_timezone.sh Asia/Singapore"
         exit 1
       fi
+    fi
+    
+    # Ensure fzf is in PATH (in case it was just installed)
+    if ! command -v fzf &>/dev/null; then
+      export PATH="$HOME/.fzf/bin:$HOME/.local/bin:$PATH"
+    fi
+    
+    # Use fzf for interactive selection
+    echo ""
+    echo "Select timezone (use arrow keys to navigate, type to filter, Enter to select):"
+    NEW_TZ=$(echo "$TIMEZONES" | fzf --height 40% --border --prompt="Timezone: " --header="Current: $CURRENT_TZ | Use arrow keys ↑↓, type to search, Enter to select" --preview="echo 'Selected: {}'")
+    
+    if [ -z "$NEW_TZ" ]; then
+      echo "❌ No timezone selected"
+      exit 1
     fi
   fi
 fi
