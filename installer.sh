@@ -15,10 +15,18 @@ fi
 
 USE_PROXY=$(jq -r 'if .use_proxy == null then false else .use_proxy end' "$CONFIG_FILE")
 PROXY_URL=$(jq -r 'if .proxy_url == null then "http://squid.internal:3128" else .proxy_url end' "$CONFIG_FILE")
+TIMEZONE=$(jq -r 'if .timezone == null or .timezone == "" then "GMT" else .timezone end' "$CONFIG_FILE")
 USER_NAME="${SUDO_USER:-$USER}"
 
 # ────────────────────────────────────────────────────────────────
 # Ensure dependencies
+# Load nvm if it exists (for user's node/npm)
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  source "$HOME/.nvm/nvm.sh"
+elif [ -s "/home/$USER_NAME/.nvm/nvm.sh" ]; then
+  source "/home/$USER_NAME/.nvm/nvm.sh"
+fi
+
 # Install node first (needed for npm)
 if ! command -v node &>/dev/null; then
   echo "Installing Node.js..."
@@ -32,6 +40,27 @@ if ! command -v jq &>/dev/null; then
   echo "Installing jq..."
   sudo apt update && sudo apt install -y jq
 fi
+
+# Find npm command path (handles nvm, snap, and regular installations)
+NPM_CMD=""
+if command -v npm &>/dev/null; then
+  NPM_CMD=$(command -v npm)
+elif [ -f "/snap/bin/npm" ]; then
+  NPM_CMD="/snap/bin/npm"
+elif [ -n "$NVM_DIR" ] && [ -d "$NVM_DIR/versions/node" ]; then
+  # Find the active nvm node version
+  NODE_VERSION=$(node -v 2>/dev/null | sed 's/v//')
+  if [ -n "$NODE_VERSION" ] && [ -f "$NVM_DIR/versions/node/$NODE_VERSION/bin/npm" ]; then
+    NPM_CMD="$NVM_DIR/versions/node/$NODE_VERSION/bin/npm"
+  fi
+fi
+
+if [ -z "$NPM_CMD" ]; then
+  echo "❌ npm not found. Cannot install @getontime/cli."
+  exit 1
+fi
+
+echo "Using npm: $NPM_CMD"
 
 # ────────────────────────────────────────────────────────────────
 # Proxy setup
@@ -55,9 +84,9 @@ fi
 # Install @getontime/cli globally
 echo "Installing @getontime/cli globally..."
 if [ "$USE_PROXY" = true ]; then
-  sudo env "PATH=$PATH" "HTTP_PROXY=$PROXY_URL" "HTTPS_PROXY=$PROXY_URL" "http_proxy=$PROXY_URL" "https_proxy=$PROXY_URL" "npm_config_proxy=$PROXY_URL" "npm_config_https_proxy=$PROXY_URL" npm install -g @getontime/cli
+  sudo env "PATH=$PATH" "HTTP_PROXY=$PROXY_URL" "HTTPS_PROXY=$PROXY_URL" "http_proxy=$PROXY_URL" "https_proxy=$PROXY_URL" "npm_config_proxy=$PROXY_URL" "npm_config_https_proxy=$PROXY_URL" "$NPM_CMD" install -g @getontime/cli
 else
-  sudo npm install -g @getontime/cli
+  sudo env "PATH=$PATH" "$NPM_CMD" install -g @getontime/cli
 fi
 
 # ────────────────────────────────────────────────────────────────
@@ -77,7 +106,7 @@ fi
 
 # ────────────────────────────────────────────────────────────────
 # Create systemd service
-echo "Creating systemd service..."
+echo "Creating systemd service with timezone: $TIMEZONE..."
 if [ "$USE_PROXY" = true ]; then
   sudo tee /etc/systemd/system/ontime.service > /dev/null <<EOL
 [Unit]
@@ -89,6 +118,7 @@ ExecStart=$ONTIME_CMD
 Restart=always
 User=$USER_NAME
 Group=$USER_NAME
+Environment=TZ=$TIMEZONE
 Environment=HTTP_PROXY=$PROXY_URL
 Environment=HTTPS_PROXY=$PROXY_URL
 Environment=http_proxy=$PROXY_URL
@@ -111,6 +141,7 @@ ExecStart=$ONTIME_CMD
 Restart=always
 User=$USER_NAME
 Group=$USER_NAME
+Environment=TZ=$TIMEZONE
 
 [Install]
 WantedBy=multi-user.target
